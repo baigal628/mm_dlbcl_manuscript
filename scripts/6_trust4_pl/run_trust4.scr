@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+#SBATCH --job-name=trust4
+#SBATCH --output=slurm_$j.out
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+
+# This script is to extract subset from summary and run the perl script
+# usage: sbatch a.scr tcga_summary row_start row_end
+module load gcc
+
+sed -n $2,${3}p $1 | perl run_trust4.pl /liulab/galib/mouse_scRNAseq_margaret/data/Margaret_CD70/

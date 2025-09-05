@@ -130,7 +130,7 @@ plot_bi_clustered_heatmap <- function(obj, ident = "seurat_clusters", slot = "da
   top_markers<- markers  %>% filter(padj <=0.05, abs(logFC) >=0.8)
   
   write_tsv(top_markers,
-            paste0(outdir, "results/tsv/", space, "/", space, "_",  fsuffix ,"_top_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
+            paste0(outdir, "data/", space, "_",  fsuffix ,"_top_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
   
   top_markers_unique <- top_markers %>% pull(feature) %>% unique()
   
@@ -150,14 +150,14 @@ plot_bi_clustered_heatmap <- function(obj, ident = "seurat_clusters", slot = "da
   top10<- top_10_markers  %>% pull(feature)  %>% unique()
   
   write_tsv(top_10_markers,
-            paste0(outdir, "results/tsv/", space, "/", space, "_",  fsuffix ,"_top10_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
+            paste0(outdir, "data/", space, "_",  fsuffix ,"_top10_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
   
   top_5_markers<- top_markers %>% group_by(group) %>% arrange(padj, -abs(logFC), .by_group = TRUE)  %>% slice_head(n = 5)
   
   top5<- top_5_markers  %>% pull(feature)  %>% unique()
   
   write_tsv(top_5_markers,
-            paste0(outdir, "results/tsv/", space, "/", space, "_",  fsuffix ,"_top5_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
+            paste0(outdir, "data/", space, "_",  fsuffix ,"_top5_markers(padj<=0.05, abs(logFC) >= 0.8.tsv"))
   
   
   ## Built data for plotting
