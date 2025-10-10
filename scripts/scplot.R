@@ -124,7 +124,7 @@ plot_bi_clustered_heatmap <- function(obj, ident = "seurat_clusters", slot = "da
   markers <- presto::wilcoxauc(obj, ident , assay = slot,
                                groups_use = clusters)
   write_tsv(markers,
-            paste0(outdir, "results/tsv/", space, "/", space, "_",  fsuffix ,"_all_markers.tsv"))
+            paste0(outdir, "data/", space, "_", fsuffix, "_",  fsuffix ,"_all_markers.tsv"))
   
   
   top_markers<- markers  %>% filter(padj <=0.05, abs(logFC) >=0.8)
