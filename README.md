@@ -61,6 +61,8 @@ BiocManager::install(c(
 conda env create -f cd70_dlbcl_env.yml
 ```
 
+The estimated installation time depends on the available computing resources. Most dependencies are standard R/Python packages, so if they are already installed, they can be used directly. A full installation from scratch may take up to one day.
+
 ## II. Explanation of the scripts
 - **0_data_preprocessing.ipynb**
 
