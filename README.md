@@ -22,6 +22,14 @@ conda activate cd70_dlbcl_env
 conda install -c conda-forge r-essentials r-devtools r-tidyverse -y
 ```
 
+Some analyses in this repository use Python-based Jupyter notebooks for visualization and statistical analyses.
+
+```{bash}
+conda install -c conda-forge python=3.9 jupyterlab numpy pandas scipy seaborn matplotlib scikit-learn -y
+
+pip install pvalannot heatmapannot
+```
+
 ### 3. Install Required R Packages
 
 ```{R}
