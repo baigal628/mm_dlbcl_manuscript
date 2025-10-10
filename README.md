@@ -64,11 +64,11 @@ conda env create -f cd70_dlbcl_env.yml
 ## II. Explanation of the scripts
 - **0_data_preprocessing.ipynb**
 
-    Reads the count matrix and removes low quality cells
+    Reads the count matrix and removes low quality cells.
 
 - **1_split_merged_data_object_and_find_marker.ipynb**
 
-    Splits Cd3⁺ Cd4⁻, Cd3⁺ Cd8⁻, and B-cell subsets based on marker expression, and identifies marker genes for each cluster
+    Splits Cd3⁺ Cd4⁻, Cd3⁺ Cd8⁻, and B-cell subsets based on marker expression, and identifies marker genes for each cluster.
 
 - **2_remove_clusters_and_subclustering.ipynb**
 
@@ -130,6 +130,7 @@ conda env create -f cd70_dlbcl_env.yml
 
     Determines the percentage of inferCNV-positive cells within clonally expanded cell populations.
 
+The runtime of each script depends on the size of the input dataset and the available computing resources. It may range from several minutes to several hours.
 
 ## III. Reproducing Data and Figures from the Manuscript
 
@@ -146,7 +147,7 @@ cd data/
 ```
 
 ### 3. Demo dataset
-We have provided one dataset to test the code. But the result will not reproduce what is shown in the manuscript.
+We have included one dataset as an example of the input data format; it is provided solely for demonstration purposes and is not intended for reproducing the results presented in the manuscript.
 
 ```{bash}
 ls data/all_analysis/Pool105_17/
@@ -155,7 +156,7 @@ barcodes.tsv.gz  features.tsv.gz  matrix.mtx.gz
 
 ```
 
-### 4. Analyze downloaded data set
+### 4. Analyze full dataset
 
 Download the file all_analysis.tar.gz and place it inside the data/ folder:
 
@@ -171,6 +172,8 @@ You should see multiple data folders named according to sample pool IDs (e.g., P
 
 Next, navigate to the scripts/ folder and open the corresponding Jupyter notebooks to construct Seurat objects and perform downstream analyses.
 In each notebook, set the working directory to the path where the repository is cloned. For example:
+
 ```{bash}
 setwd("/path/to/cd70_dlbcl_manuscript/")
 ```
+
