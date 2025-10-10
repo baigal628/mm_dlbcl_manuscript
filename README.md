@@ -1,4 +1,4 @@
-# Cd70 Deficiency Accelerates Bcl6-driven Diffuse Large B Cell Lymphoma and Impairs CD4⁺ Cytotoxic T-cell Immune Surveillance
+# Cd70-deficiency Accelerates the Development of Bcl6-driven Diffuse Large B-cell Lymphomas and Impairs CD4+ Cytotoxic T-cell Immune Surveillance
 
 ## I. Installation and Environment Setup
 
