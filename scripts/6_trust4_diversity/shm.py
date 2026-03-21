@@ -6,6 +6,7 @@ from AIRR-formatted TSV files with IMGT-gapped alignments.
 
 import pandas as pd
 import numpy as np
+import scipy as sp
 from typing import Dict, Tuple
 import argparse
 import sys
@@ -124,6 +125,96 @@ def count_mutations(seq_aligned: str, germline_aligned: str,
                 mutations += 1
         
     return mutations, synonymous_mutations, valid_positions
+
+def Lossos_test(sequence_alignment, germline_alignment, FR_mutations, FR_synonymous_mutations, CDR_mutations, CDR_synonymous_mutations, regions):
+    # Calculate the baseline mutation probability that a random mutation replace the amino acid, Rf_FR, Rf_CDR
+    Rf_FR = 0
+    RF_CDR = 0
+    RF_FR_total = 0 # total number of possible mutations in FR regions
+    RF_CDR_total = 0 # total number of possible mutations in CDR regions
+    
+    L_FR = regions['FR1'][1] - regions['FR1'][0] + regions['FR2'][1] - regions['FR2'][0] + regions['FR3'][1] - regions['FR3'][0]
+    L_CDR = regions['CDR1'][1] - regions['CDR1'][0] + regions['CDR2'][1] - regions['CDR2'][0]
+    
+    tmp = L_FR+L_CDR
+    L_FR = L_FR / tmp # relative fraction
+    L_CDR = L_CDR / tmp
+
+    for region_name, (start, end) in regions.items():
+        germline = germline_alignment[start:end].replace('.', '')
+        for i in range(0, start-end+1, 3):
+            germ_codon = germ[i:i+3].upper()
+            if len(germ_codon) < 3:
+                continue
+            if ("-" in germ_codon):
+                continue
+            for j in range(i, i+3):
+                if j >= len(germ):
+                    break
+                germ_base = germ[j].upper()
+                
+                for base in ['A', 'C', 'G', 'T']:
+                    if base == germ_base:
+                        continue
+                    mutated_codon = list(germ_codon)
+                    mutated_codon[j-i] = base
+                    mutated_codon = ''.join(mutated_codon)
+                    germ_aa = dna_to_aa.get(germ_codon, 'X')
+                    mutated_aa = dna_to_aa.get(mutated_codon, 'X')
+                    if germ_aa != mutated_aa:
+                         if region_name.startswith('FR'):
+                            RF_FR += 1
+                         elif region_name.startswith('CDR'):
+                            RF_CDR += 1
+                    if region_name.startswith('FR'):
+                        Rf_FR_total += 1
+                    elif region_name.startswith('CDR'):
+                        RF_CDR_total += 1 
+    Rf_FR = RF_FR / Rf_FR_total if Rf_FR_total > 0 else 0
+    Rf_CDR = RF_CDR / RF_CDR_total if RF_CDR_total > 0 else 0
+
+    # core Lossos test
+    def Test(s1, s2, r1, r2, p1, p2, q1, q2):
+        ret = [0, 0]
+        p = 0
+        n = s1 + s2 + r1 + r2
+        # Tet for CDR to have many synonymous mutation
+        for k in range(r2, n+1):
+            # enumerate all the combation for the variation S1,S2,R1, k where k+S1+S2+R2=n
+            for S1 in range(n - k + 1):
+                if (n - k - S1 <= 0):
+                    continue
+                for S2 in range(n - k - S1 + 1):                                                         
+                    R1 = n - k - S1 - S2
+                    if (R1 < 0):
+                        continue
+                    # calculate the multinomal of (n, R1, S1, R2, S2) with the probability of (p1, q1, p2, q2) 
+                    x = sp.stats.multinomial.pmf([R1, S1, k, S2], n, [p1, q1, p1, q2])
+                    if (k == r2):
+                        p += x/2
+                    else:
+                        p += x
+
+        # Test for FR to have very few synonymou mutation
+        for k in range(0, r1+1):
+            # enumerate all the combation for the variation k, S1,S2,R2 where k+S1+S2+R2=n
+            for S1 in range(n - k + 1):
+                if (n - k - S1 <= 0):
+                    continue
+                for S2 in range(n - k - S1 + 1):
+                    R2 = n - k - S1 - S2
+                    if (R2 < 0):
+                        continue
+                    # calculate the multinomal of (n, k, S1, S2, R2) with the probability of (p1, q1, p2, q2) 
+                    x = sp.stats.multinomial.pmf([k, S1, R2, S2], n, [p1, q1, p1, q2])
+                    if (k == r1):
+                        p += x/2
+                    else:
+                        p += x
+        ret[1] = p
+        return ret
+
+    return Test(FR_synonymous_mutations, CDR_synonymous_mutations, FR_mutations - FR_synonymous_mutations, CDR_mutations - CDR_synonymous_mutations, Rf_FR, L_FR, Rf_CDR * L_CDR, (1-Rf_FR) * L_FR, (1-Rf_CDR) * L_CDR)
 
 def ParseCigar(cigar):
     cigarFields = re.findall("\d+\w", cigar)
