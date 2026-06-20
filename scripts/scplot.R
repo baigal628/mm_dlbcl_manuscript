@@ -1386,3 +1386,323 @@ lgd = Legend(labels = c(0, 1, 2, 3, 4, 5),
                                             gp = gpar(fill = "black"))            
                     )
              )
+
+
+EnrichedView = function(enrichment,
+                        rank_by = "pvalue",
+                        mode = 1,
+                        subset = NULL,
+                        top = 0, bottom = 0,
+                        x = "LogFDR",
+                        charLength = 40,
+                        filename = NULL,
+                        width = 7, height = 4, ...){
+
+  if(is(enrichment, "enrichResult")) enrichment = slot(enrichment, "result")
+  if(is(enrichment, "gseaResult")) enrichment = slot(enrichment, "result")
+  # No enriched pathways
+  if(is.null(enrichment) || nrow(enrichment)==0){
+    p1 = noEnrichPlot("No enriched terms")
+    if(!is.null(filename)){
+      ggsave(plot=p1,filename=filename, units = "in", width=width, height=height, ...)
+    }
+    return(p1)
+  }
+  flag = ifelse("NES"%in%colnames(enrichment), TRUE, FALSE)
+  if(!flag) colnames(enrichment)[colnames(enrichment)=="Count"] = "NES"
+  ## Rank enriched pathways ##
+  enrichment$logP = round(-log10(enrichment$pvalue), 1)
+  enrichment$logFDR = round(-log10(enrichment$p.adjust), 1)
+  enrichment = enrichment[!is.na(enrichment$ID), ]
+  if(tolower(rank_by) == "pvalue"){
+    enrichment = enrichment[order(enrichment$pvalue, -abs(enrichment$NES)), ]
+  }else if(tolower(rank_by) == "nes"){
+    enrichment = enrichment[order(-abs(enrichment$NES), enrichment$pvalue), ]
+  }
+
+  ## Normalize term description ##
+  terms = as.character(enrichment$Description)
+  terms = lapply(terms, function(x,k){
+    x = as.character(x)
+    if(nchar(x)>k){x=substr(x,start=1,stop=k)}
+    return(x)}, charLength)
+  enrichment$Description = do.call(rbind, terms)
+  enrichment = enrichment[!duplicated(enrichment$Description),]
+
+  # Select pathways to show ##
+  if(bottom>0){
+    tmp = enrichment[enrichment$NES<0, ]
+    subset = c(subset, tmp$ID[1:min(nrow(tmp), bottom)])
+  }
+  if(top>0){
+    tmp = enrichment[enrichment$NES>0, ]
+    subset = c(subset, tmp$ID[1:min(nrow(tmp), top)])
+  }
+  if(!is.null(subset)){
+    idx = enrichment$ID %in% subset
+    if(sum(idx)==0) return(noEnrichPlot("No eligible terms!!!"))
+    enrichment = enrichment[idx, ]
+  }
+  # enrichment$ID = factor(enrichment$ID, levels=c(pid_neg, pid_pos))
+  # enrichment = enrichment[order(enrichment$ID), ]
+  enrichment$Description = factor(enrichment$Description,
+                                  levels=unique(enrichment$Description))
+  enrichment$ID = factor(enrichment$ID, levels=unique(enrichment$ID))
+
+  ## Prepare data for plotting ##
+  if(x=="NES"){
+    enrichment$x = enrichment$NES
+    enrichment$size = enrichment$logFDR
+  }else if(x=="LogP"){
+    enrichment$x = enrichment$logP
+    enrichment$size = abs(enrichment$NES)
+  }else{
+    enrichment$x = enrichment$logFDR
+    enrichment$size = abs(enrichment$NES)
+  }
+
+  # Visualize the top enriched terms
+  enrichment$col = "UG"
+  enrichment$col[enrichment$NES<0] = "DG"
+
+  if(mode==1){
+    ## Plot the figure ##
+    p1 = ggplot(data=enrichment, aes_string(x="x", y="Description", size="size"))
+    p1 = p1 + geom_point(aes(color = col))
+    p1 = p1 + scale_color_manual(values = c("DG"="#377eb8", "UG"="#e41a1c"))
+    p1 = p1 + theme(panel.grid.major=element_line(colour="gray90"),
+                    panel.grid.minor=element_blank(),
+                    panel.background=element_blank())
+    p1 = p1 + theme(legend.position="right")
+    p1 = p1 + theme(legend.key = element_rect(fill = "transparent", colour = "transparent"))
+    p1 = p1 + theme_bw(base_size = 14)
+    p1 = p1 + theme(plot.title = element_text(hjust = 0.5))
+    p1 = p1 + guides(color = "none")
+  }else if(mode == 2){
+    idx = (max(enrichment$x)-enrichment$x) > enrichment$x
+    enrichment$hjust = 1.1
+    enrichment$hjust[idx] = -0.1
+    p1 = ggplot(enrichment, aes_string("x", "ID", label = "Description"))
+    p1 = p1 + geom_point(aes_string(color = "col", size = "size"))
+    p1 = p1 + xlim(0, NA)
+    p1 = p1 + geom_text(aes_string(hjust = "hjust"))
+    p1 = p1 + theme_bw(base_size = 14) + theme(plot.title = element_text(hjust = 0.5))
+  }
+  if(x=="NES"){
+    p1 = p1 + labs(x = "Enrichment score", y = NULL, color = NULL,
+                   size = expression(-log[10]*FDR))
+    if(!flag) p1 = p1 + labs(x = "Count")
+  }else{
+    p1 = p1 + labs(x = expression(-log[10]*FDR), y = NULL, color = NULL, size = "NES")
+    if(!flag) p1 = p1 + labs(size = "Count")
+  }
+
+  if(!is.null(filename)){
+    ggsave(plot=p1, filename=filename, units = "in", width=width, height=height, ...)
+  }
+  return(p1)
+}
+
+noEnrichPlot = function(main = "No enriched terms"){
+  p1 = ggplot()
+  p1 = p1 + geom_text(aes(x=0, y=0, label="No enriched terms"), size=6)
+  p1 = p1 + labs(title=main)
+  p1 = p1 + theme(plot.title = element_text(size=12))
+  p1 = p1 + theme_bw(base_size = 14)
+  p1 = p1 + theme(plot.title = element_text(hjust = 0.5))
+  p1
+}
+
+# run_de<- function(obj, outdir, prefix){
+    
+    
+#     n_median = obj@meta.data  %>% count(pool_id)  %>% pull(n)  %>% median()
+    
+#     cells_to_keep <- obj@meta.data %>% 
+#                         group_by(pool_id) %>% 
+#                         slice_sample(n = min(n(), n_median)) %>%
+#                         pull(cell = rownames(.))
+
+    
+#     obj <- subset(obj, cells = cells_to_keep)
+    
+#     df <- obj@meta.data %>% count(pool_id)
+
+#     ggplot(df, aes(x = reorder(pool_id, n), y = n)) +
+#         geom_col() + coord_flip() + 
+#         labs(x = "sample", y = "Number of cells") + theme_bw()
+    
+    
+#     compare <- obj$genotype  %>% unique( )
+#     print(compare)
+#     markers <- presto::wilcoxauc(obj, "genotype" , assay = "data", groups_use = compare)
+
+#     write_tsv(markers, paste0(outdir, prefix, "_all_markers.tsv"))
+
+#     hist(markers$padj, breaks = 20)
+#     hist(markers$logFC, breaks = 20)
+
+#     top_markers<- markers  %>% filter(padj <=0.05, abs(logFC) >=0.1)  %>% filter() %>% arrange(padj, -abs(logFC), .by_group = TRUE)
+
+#     write_tsv(top_markers,
+#             paste0(outdir, prefix ,"_significant_markers_padj_0.05_abslogFC_0.1.tsv"))
+
+
+#     up_in_double<- top_markers %>% 
+#         filter(group == "CD70-/-;Bcl6tg/+", logFC > 0) %>% 
+#         arrange(padj)  %>% 
+#         slice_head(n = 10)
+
+#     down_in_double<- top_markers %>% 
+#         filter(group == "CD70-/-;Bcl6tg/+", logFC < 0) %>% 
+#         arrange(padj)  %>% 
+#         slice_head(n = 10)
+
+
+#     write_tsv(up_in_double,
+#             paste0(outdir, prefix ,"_top10_up_regulated_in_double.tsv"))
+
+#     write_tsv(down_in_double,
+#             paste0(outdir, prefix ,"_top10_down_regulated_in_double.tsv"))
+
+#     genelist = c(up_in_double$feature, down_in_double$feature)  %>% unique()
+
+#     p<- DotPlot(object = obj, features = genelist, group.by = "genotype", scale = T) +
+#             theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = prefix, y = "genotype")
+#     p 
+#     ggsave(paste0(outdir, prefix ,"_top10_up_and_down_regulated_genes_in_double.pdf"), p, width = 7, height = 4)
+    
+#     p<- VlnPlot(obj, features = genelist, group.by = "genotype", ncol = 10, pt.size = 0)
+
+#     ggsave(paste0(outdir, prefix ,"_top10_up_and_down_regulated_genes_in_double_vlnplot.pdf"), p, width = 10, height = 5)
+# }
+
+# run_de_pseudobulk <- function(obj, outdir, prefix) {
+
+#     set.seed(123)
+
+#     raw_counts <- AggregateExpression(obj, group.by = "orig.ident", slot = "counts")
+#     cell_counts <- table(obj$orig.ident)
+#     mean_counts <- sweep(raw_counts$RNA, 2, cell_counts[colnames(raw_counts$RNA)], "/")
+
+#     keep_genes <- rowSums(raw_counts$RNA >= 3) >= 3
+#     mean_counts <- mean_counts[keep_genes, ]
+
+#     log_mean_counts <- log1p(mean_counts)
+
+#     genotype_group <- obj@meta.data %>% distinct(orig.ident, genotype) %>% deframe()
+#     genotype_group <- genotype_group[colnames(mean_counts)]
+
+#     results <- sapply(rownames(mean_counts), function(gene) {
+#         g1_log <- log_mean_counts[gene, genotype_group == "Bcl6tg/+"]
+#         g2_log <- log_mean_counts[gene, genotype_group == "CD70-/-;Bcl6tg/+"]
+
+#         g1_raw <- mean_counts[gene, genotype_group == "Bcl6tg/+"]
+#         g2_raw <- mean_counts[gene, genotype_group == "CD70-/-;Bcl6tg/+"]
+
+#         if (length(unique(c(g1_log, g2_log))) <= 1) {
+#             return(c(p = 1, logFC = 0))
+#         }
+
+#         wt <- wilcox.test(g2_log, g1_log, exact = FALSE)
+#         c(p = wt$p.value, logFC = log2(mean(g2_raw) + 1) - log2(mean(g1_raw) + 1))
+#     })
+
+#     markers <- as.data.frame(t(results))
+#     markers$feature <- rownames(markers)
+#     markers$padj <- p.adjust(markers$p, method = "BH")
+#     markers <- markers %>% arrange(padj)
+
+#     write_tsv(markers, paste0(outdir, prefix, "_all_markers.tsv"))
+
+#     # Volcano plot
+#     markers$neg_log10_padj <- -log10(markers$padj)
+#     markers$sig <- case_when(
+#         markers$padj <= 0.1 & markers$logFC >= 0.5  ~ "Up",
+#         markers$padj <= 0.1 & markers$logFC <= -0.5 ~ "Down",
+#         TRUE ~ "NS"
+#     )
+
+#     top_genes <- markers %>%
+#         filter(sig != "NS") %>%
+#         arrange(padj) %>%
+#         slice_head(n = 20)
+
+#     p_volcano <- ggplot(markers, aes(x = logFC, y = neg_log10_padj, color = sig)) +
+#         geom_point(alpha = 0.5, size = 1) +
+#         scale_color_manual(values = c("Up" = "#E64B35", "Down" = "#4DBBD5", "NS" = "grey70")) +
+#         geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", color = "black") +
+#         geom_hline(yintercept = -log10(0.1), linetype = "dashed", color = "black") +
+#         ggrepel::geom_text_repel(
+#             data = top_genes,
+#             aes(label = feature),
+#             size = 3, max.overlaps = 20, color = "black"
+#         ) +
+#         labs(
+#             title = paste0(prefix, ":\nVolcano plot padj<= 0.1 abs(logFC) >= 0.5"),
+#             x = "log2 Fold Change",
+#             y = "-log10(adjusted p-value)",
+#             color = NULL
+#         ) +
+#         theme_classic(base_size = 14)
+
+#     ggsave(paste0(outdir, prefix, "_volcano_plot.pdf"), p_volcano, width = 7, height = 5)
+
+#     # Histograms
+#     p_padj <- ggplot(markers, aes(x = padj)) +
+#         geom_histogram(bins = 30, fill = "#4DBBD5", color = "black") +
+#         geom_vline(xintercept = 0.1, linetype = "dashed", color = "red") +
+#         labs(
+#             title = paste0(prefix, ":\nAdjusted p-value distribution"),
+#             x = "Adjusted p-value",
+#             y = "Number of genes"
+#         ) + theme_classic(base_size = 14)
+
+#     p_logfc <- ggplot(markers, aes(x = logFC)) +
+#         geom_histogram(bins = 30, fill = "#E64B35", color = "black") +
+#         geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", color = "blue") +
+#         labs(
+#             title = paste0(prefix, ":\nlog2 Fold Change distribution"),
+#             x = "log2 Fold Change",
+#             y = "Number of genes"
+#         ) + theme_classic(base_size = 14)
+
+#     ggsave(paste0(outdir, prefix, "_padj_histogram.pdf"), p_padj, width = 5, height = 4)
+#     ggsave(paste0(outdir, prefix, "_logFC_histogram.pdf"), p_logfc, width = 5, height = 4)
+
+#     # Significant markers
+#     markers_sig <- markers %>% filter(padj <= 0.1, abs(logFC) >= 0.5) %>% arrange(padj)
+#     write_tsv(markers_sig, paste0(outdir, prefix, "_significant_markers_padj_0.1_abslogFC_0.5.tsv"))
+
+#     up_in_double <- markers_sig %>%
+#         filter(logFC > 0) %>%
+#         arrange(padj) %>%
+#         slice_head(n = 10)
+
+#     down_in_double <- markers_sig %>%
+#         filter(logFC < 0) %>%
+#         arrange(padj) %>%
+#         slice_head(n = 10)
+
+#     genelist <- c(up_in_double$feature, down_in_double$feature) %>% unique()
+
+#     if (length(genelist) == 0) {
+#         message("No significant DE genes for ", prefix)
+#     } else {
+#         write_tsv(up_in_double, paste0(outdir, prefix, "_top10_up_regulated_in_double.tsv"))
+#         write_tsv(down_in_double, paste0(outdir, prefix, "_top10_down_regulated_in_double.tsv"))
+
+#         p <- DotPlot(object = obj, features = genelist, group.by = "genotype", scale = TRUE) +
+#             theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+#             labs(title = prefix, y = "genotype")
+
+#         ggsave(paste0(outdir, prefix, "_top10_up_and_down_regulated_genes_in_double.pdf"), p, width = 7, height = 4)
+
+#         p <- VlnPlot(obj, features = genelist, group.by = "genotype", ncol = 10, pt.size = 0)
+#         ggsave(paste0(outdir, prefix, "_top10_up_and_down_regulated_genes_in_double_vlnplot.pdf"), p, width = 10, height = 5)
+
+#         p <- VlnPlot(obj, features = genelist, group.by = "orig.ident", split.by = "genotype",
+#                       pt.size = 0, stack = TRUE, sort = TRUE, flip = TRUE)
+#         ggsave(paste0(outdir, prefix, "_top10_up_and_down_regulated_genes_in_double_vlnplot_by_sample.pdf"), p, width = 14, height = 8)
+#     }
+# }
