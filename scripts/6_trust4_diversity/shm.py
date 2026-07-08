@@ -126,98 +126,6 @@ def count_mutations(seq_aligned: str, germline_aligned: str,
         
     return mutations, synonymous_mutations, valid_positions
 
-def Lossos_test(sequence_alignment, germline_alignment, FR_mutations, FR_synonymous_mutations, CDR_mutations, CDR_synonymous_mutations, regions):
-    # Calculate the baseline mutation probability that a random mutation replace the amino acid, Rf_FR, Rf_CDR
-    Rf_FR = 0
-    Rf_CDR = 0
-    Rf_FR_total = 0 # total number of possible mutations in FR regions
-    Rf_CDR_total = 0 # total number of possible mutations in CDR regions
-    
-    L_FR = regions['FR1'][1] - regions['FR1'][0] + regions['FR2'][1] - regions['FR2'][0] + regions['FR3'][1] - regions['FR3'][0]
-    L_CDR = regions['CDR1'][1] - regions['CDR1'][0] + regions['CDR2'][1] - regions['CDR2'][0]
-    
-    tmp = L_FR+L_CDR
-    L_FR = L_FR / tmp # relative fraction
-    L_CDR = L_CDR / tmp
-
-    for region_name, (start, end) in regions.items():
-        germline = germline_alignment[start:end].replace('.', '')
-        for i in range(0, start-end+1, 3):
-            germ_codon = germ[i:i+3].upper()
-            if len(germ_codon) < 3:
-                continue
-            if ("-" in germ_codon):
-                continue
-            for j in range(i, i+3):
-                if j >= len(germ):
-                    break
-                germ_base = germ[j].upper()
-                
-                for base in ['A', 'C', 'G', 'T']:
-                    if base == germ_base:
-                        continue
-                    mutated_codon = list(germ_codon)
-                    mutated_codon[j-i] = base
-                    mutated_codon = ''.join(mutated_codon)
-                    germ_aa = dna_to_aa.get(germ_codon, 'X')
-                    mutated_aa = dna_to_aa.get(mutated_codon, 'X')
-                    if germ_aa != mutated_aa:
-                         if region_name.startswith('FR'):
-                            Rf_FR += 1
-                         elif region_name.startswith('CDR'):
-                            Rf_CDR += 1
-                    if region_name.startswith('FR'):
-                        Rf_FR_total += 1
-                    elif region_name.startswith('CDR'):
-                        Rf_CDR_total += 1 
-    Rf_FR = Rf_FR / Rf_FR_total if Rf_FR_total > 0 else 0
-    Rf_CDR = Rf_CDR / Rf_CDR_total if Rf_CDR_total > 0 else 0
-
-    # core Lossos test
-    # return two numbers: the p-value of CDR to have many replacement changes, and the p-value of FR to have very few replacement changes.
-    def Test(s1, s2, r1, r2, p1, p2, q1, q2):
-        ret = [0, 0]
-        p = 0
-        n = s1 + s2 + r1 + r2
-        # Tet for CDR to have many synonymous mutation
-        for k in range(r2, n+1):
-            # enumerate all the combation for the variation S1,S2,R1, k where k+S1+S2+R2=n
-            for S1 in range(n - k + 1):
-                if (n - k - S1 <= 0):
-                    continue
-                for S2 in range(n - k - S1 + 1):                                                         
-                    R1 = n - k - S1 - S2
-                    if (R1 < 0):
-                        continue
-                    # calculate the multinomal of (n, R1, S1, R2, S2) with the probability of (p1, q1, p2, q2) 
-                    x = stats.multinomial.pmf([R1, S1, k, S2], n, [p1, q1, p1, q2])
-                    if (k == r2):
-                        p += x/2
-                    else:
-                        p += x
-        ret[0] = p
-        
-        p = 0
-        # Test for FR to have very few synonymou mutation
-        for k in range(0, r1+1):
-            # enumerate all the combation for the variation k, S1,S2,R2 where k+S1+S2+R2=n
-            for S1 in range(n - k + 1):
-                if (n - k - S1 <= 0):
-                    continue
-                for S2 in range(n - k - S1 + 1):
-                    R2 = n - k - S1 - S2
-                    if (R2 < 0):
-                        continue
-                    # calculate the multinomal of (n, k, S1, S2, R2) with the probability of (p1, q1, p2, q2) 
-                    x = stats.multinomial.pmf([k, S1, R2, S2], n, [p1, q1, p1, q2])
-                    if (k == r1):
-                        p += x/2
-                    else:
-                        p += x
-        ret[1] = p
-        return ret
-
-    return Test(FR_synonymous_mutations, CDR_synonymous_mutations, FR_mutations - FR_synonymous_mutations, CDR_mutations - CDR_synonymous_mutations, Rf_FR * L_FR, Rf_CDR * L_CDR, (1-Rf_FR) * L_FR, (1-Rf_CDR) * L_CDR)
 
 def ParseCigar(cigar):
     cigarFields = re.findall("\d+\w", cigar)
@@ -304,8 +212,6 @@ def calculate_shm_rates(df: pd.DataFrame) -> pd.DataFrame:
         total_rate = total_mutations / total_positions if total_positions > 0 else np.nan
         total_syn_rate = total_synonymous / total_mutations if total_mutations > 0 else np.nan
        
-        lossos_pvalues = Lossos_test(seq_aligned, germline_aligned, fr_mutations, fr_synonymous, cdr_mutations, cdr_synonymous, regions)
-
         # Store results
         result = {
             'sequence_id': row.get('sequence_id', idx),
@@ -354,9 +260,6 @@ def calculate_shm_rates(df: pd.DataFrame) -> pd.DataFrame:
             'total_V_positions': total_positions,
             'total_V_rate': total_rate,
             'total_V_syn_rate': total_syn_rate,
-
-            'CDR_Lossos_pvalue': lossos_pvalues[0],
-            'FR_Lossos_pvalue': lossos_pvalues[1],
         }
         
         results.append(result)
@@ -368,7 +271,7 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
     Calculate summary statistics across all sequences.
     """
     summary = {
-        'Region': ['CDR1', 'CDR2', 'CDR1+CDR2', 'CDR1+CDR2 synonymous', 'FR1', 'FR2', 'FR3', 'FR1+FR2+FR3', 'FR1+FR2+FR3 synonymous', 'Total V', 'Total V synonymous', 'Lossos CDR p-value', 'Lossos FR p-value'],
+        'Region': ['CDR1', 'CDR2', 'CDR1+CDR2', 'CDR1+CDR2 synonymous', 'FR1', 'FR2', 'FR3', 'FR1+FR2+FR3', 'FR1+FR2+FR3 synonymous', 'Total V', 'Total V synonymous'],
         'Mean_Rate': [
             shm_df['CDR1_rate'].mean(),
             shm_df['CDR2_rate'].mean(),
@@ -381,8 +284,6 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
             shm_df['FR_syn_rate'].mean(),
             shm_df['total_V_rate'].mean(),
             shm_df['total_V_syn_rate'].mean(),
-            shm_df['CDR_Lossos_pvalue'].mean(),
-            shm_df['FR_Lossos_pvalue'].mean(),
         ],
         'Median_Rate': [
             shm_df['CDR1_rate'].median(),
@@ -396,8 +297,6 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
             shm_df['FR_syn_rate'].median(),
             shm_df['total_V_rate'].median(),
             shm_df['total_V_syn_rate'].median(),
-            shm_df['CDR_Lossos_pvalue'].median(),
-            shm_df['FR_Lossos_pvalue'].median(),
         ],
         'Std_Rate': [
             shm_df['CDR1_rate'].std(),
@@ -411,8 +310,6 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
             shm_df['FR_syn_rate'].std(),
             shm_df['total_V_rate'].std(),
             shm_df['total_V_syn_rate'].std(),
-            shm_df['CDR_Lossos_pvalue'].std(),
-            shm_df['FR_Lossos_pvalue'].std(),
         ],
         'Total_Mutations': [
             shm_df['CDR1_mutations'].sum(),
@@ -426,8 +323,6 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
             shm_df['FR_synonymous'].sum(),
             shm_df['total_V_mutations'].sum(),
             shm_df['total_V_synonymous'].sum(),
-            np.nan, # Lossos p-values don't have "mutations"
-            np.nan,
         ],
         'Total_Positions': [
             shm_df['CDR1_positions'].sum(),
@@ -441,8 +336,6 @@ def calculate_summary_statistics(shm_df: pd.DataFrame) -> pd.DataFrame:
             shm_df['FR_mutations'].sum(),  
             shm_df['total_V_positions'].sum(),
             shm_df['total_V_mutations'].sum(),  
-            np.nan, # Lossos p-values don't have "positions"
-            np.nan,
         ],
     }
     
